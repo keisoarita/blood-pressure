@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>血圧管理アプリ</title>
+    <!-- グラフ描画用ライブラリ Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #333333;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --success: #2ecc71;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 650px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+        }
+
+        /* ユーザー切り替えタブ */
+        .user-switch {
+            display: flex;
+            background: #e2e8f0;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+
+        .user-btn {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #64748b;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .user-btn.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-row .form-group {
+            flex: 1;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+
+        button.btn-primary {
+            width: 100%;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button.btn-primary:hover {
+            background-color: #357abd;
+        }
+
+        /* ツールバー（見出しとCSVボタン） */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .section-header h2 {
+            font-size: 1.2rem;
+            margin: 0;
+        }
+
+        .btn-csv {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-csv:hover {
+            background-color: #219653;
+        }
+
+        /* 履歴一覧 */
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .history-item {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 6px solid #ccc;
+        }
+
+        .history-item.status-normal { border-left-color: var(--success); }
+        .history-item.status-warning { border-left-color: var(--warning); }
+        .history-item.status-danger { border-left-color: var(--danger); }
+
+        .item-data {
+            display: flex;
+            gap: 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        .item-date {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 4px;
+        }
+
+        .item-memo {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .delete-btn {
+            background: transparent;
+            color: #aaa;
+            border: none;
+            font-size: 1.2rem;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        .delete-btn:hover {
+            color: var(--danger);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: white;
+            margin-left: 8px;
+        }
+        .badge.status-normal { background: var(--success); }
+        .badge.status-warning { background: var(--warning); }
+        .badge.status-danger { background: var(--danger); }
+
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>💓 血圧管理ノート</h1>
+
+    <!-- ユーザー切り替えタブ -->
+    <div class="user-switch">
+        <button id="btn-user-KEISO" class="user-btn" onclick="switchUser('KEISO')">👤 KEISO</button>
+        <button id="btn-user-MISAE" class="user-btn" onclick="switchUser('MISAE')">👤 MISAE</button>
+    </div>
+
+    <!-- 入力フォーム -->
+    <div class="card">
+        <form id="bp-form">
+            <div class="form-group">
+                <label for="datetime">測定日時 (<span id="current-user-display"></span>)</label>
+                <input type="datetime-local" id="datetime" required>
+            </div>
+
+            <div class="input-row">
+                <div class="form-group">
+                    <label for="systolic">最高 (上)</label>
+                    <input type="number" id="systolic" placeholder="120" required min="50" max="250">
+                </div>
+                <div class="form-group">
+                    <label for="diastolic">最低 (下)</label>
+                    <input type="number" id="diastolic" placeholder="80" required min="30" max="200">
+                </div>
+                <div class="form-group">
+                    <label for="pulse">脈拍</label>
+                    <input type="number" id="pulse" placeholder="70" min="30" max="200">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="memo">メモ</label>
+                <input type="text" id="memo" placeholder="起床後、食後など">
+            </div>
+
+            <button type="submit" class="btn-primary" id="save-btn">記録を保存する</button>
+        </form>
+    </div>
+
+    <!-- グラフ表示エリア -->
+    <div class="card">
+        <h2 style="font-size: 1.1rem; margin-top:0;">📊 推移グラフ (<span class="user-label"></span>)</h2>
+        <div class="chart-container">
+            <canvas id="bpChart"></canvas>
+        </div>
+    </div>
+
+    <!-- 履歴一覧とCSVダウンロード -->
+    <div class="section-header">
+        <h2>測定履歴 (<span class="user-label"></span>)</h2>
+        <button class="btn-csv" onclick="exportToCSV()">📥 CSV出力</button>
+    </div>
+    <ul class="history-list" id="history-list"></ul>
+</div>
+
+<script>
+    // 現在選択中のユーザー（初期値はKEISO、前回の選択があれば復元）
+    let currentUser = localStorage.getItem('bp_active_user') || 'KEISO';
+    let chartInstance = null;
+
+    // ユーザー切り替え
+    function switchUser(userName) {
+        currentUser = userName;
+        localStorage.setItem('bp_active_user', userName);
+
+        // タブの見た目更新
+        document.querySelectorAll('.user-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`btn-user-${userName}`).classList.add('active');
+
+        // ラベル類の更新
+        document.getElementById('current-user-display').textContent = `${userName}さんの記録`;
+        document.querySelectorAll('.user-label').forEach(el => el.textContent = userName);
+        document.getElementById('save-btn').textContent = `${userName}さんの記録を保存`;
+
+        // データの再描画
+        renderList();
+        updateChart();
+    }
+
+    // 現在日時のセット
+    function setCurrentDateTime() {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('datetime').value = now.toISOString().slice(0, 16);
+    }
+
+    // 血圧判定
+    function judgeBloodPressure(sys, dia) {
+        if (sys >= 135 || dia >= 85) {
+            return { status: 'status-danger', text: '高血圧' };
+        } else if (sys >= 125 || dia >= 75) {
+            return { status: 'status-warning', text: '注意' };
+        } else {
+            return { status: 'status-normal', text: '正常' };
+        }
+    }
+
+    // ユーザーごとの保存キーを取得
+    function getStorageKey() {
+        return `bp_records_${currentUser}`;
+    }
+
+    function getRecords() {
+        return JSON.parse(localStorage.getItem(getStorageKey())) || [];
+    }
+
+    function saveRecords(records) {
+        localStorage.setItem(getStorageKey(), JSON.stringify(records));
+    }
+
+    // 一覧描画
+    function renderList() {
+        const list = document.getElementById('history-list');
+        const records = getRecords();
+        list.innerHTML = '';
+
+        if (records.length === 0) {
+            list.innerHTML = `<li style="text-align:center; color:#999; list-style:none;">${currentUser}さんの記録はまだありません</li>`;
+            return;
+        }
+
+        records.forEach((r, index) => {
+            const judge = judgeBloodPressure(r.systolic, r.diastolic);
+            const dateStr = new Date(r.datetime).toLocaleString('ja-JP', {
+                month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
+            const li = document.createElement('li');
+            li.className = `history-item ${judge.status}`;
+            li.innerHTML = `
+                <div>
+                    <div class="item-date">
+                        ${dateStr}
+                        <span class="badge ${judge.status}">${judge.text}</span>
+                    </div>
+                    <div class="item-data">
+                        <span>${r.systolic} / ${r.diastolic} <small style="font-size:0.7rem; font-weight:normal;">mmHg</small></span>
+                        ${r.pulse ? `<span>💓 ${r.pulse} <small style="font-size:0.7rem; font-weight:normal;">bpm</small></span>` : ''}
+                    </div>
+                    ${r.memo ? `<div class="item-memo">${escapeHtml(r.memo)}</div>` : ''}
+                </div>
+                <button class="delete-btn" onclick="deleteRecord(${index})">✕</button>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+    // グラフ更新
+    function updateChart() {
+        const records = getRecords();
+        const sortedRecords = [...records].reverse();
+
+        const labels = sortedRecords.map(r => {
+            const d = new Date(r.datetime);
+            return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        });
+        const systolicData = sortedRecords.map(r => r.systolic);
+        const diastolicData = sortedRecords.map(r => r.diastolic);
+        const pulseData = sortedRecords.map(r => r.pulse);
+
+        const ctx = document.getElementById('bpChart').getContext('2d');
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '最高血圧 (上)',
+                        data: systolicData,
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        tension: 0.2,
+                        borderWidth: 2,
+                    },
+                    {
+                        label: '最低血圧 (下)',
+                        data: diastolicData,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.2,
+                        borderWidth: 2,
+                    },
+                    {
+                        label: '脈拍',
+                        data: pulseData,
+                        borderColor: '#2ecc71',
+                        borderDash: [5, 5],
+                        tension: 0.2,
+                        borderWidth: 1.5,
+                        hidden: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        min: 40,
+                        max: 200,
+                        ticks: { stepSize: 20 }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    // CSVエクスポート（ファイル名にユーザー名を含める）
+    function exportToCSV() {
+        const records = getRecords();
+        if (records.length === 0) {
+            alert(`${currentUser}さんのデータがありません。`);
+            return;
+        }
+
+        let csvContent = `氏名: ${currentUser}\r\n測定日時,最高血圧(mmHg),最低血圧(mmHg),脈拍(bpm),判定,メモ\r\n`;
+
+        records.forEach(r => {
+            const judge = judgeBloodPressure(r.systolic, r.diastolic);
+            const formattedDate = r.datetime.replace('T', ' ');
+            const memoEscaped = `"${(r.memo || '').replace(/"/g, '""')}"`;
+            csvContent += `${formattedDate},${r.systolic},${r.diastolic},${r.pulse || ''},${judge.text},${memoEscaped}\r\n`;
+        });
+
+        const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        const now = new Date();
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+        a.href = url;
+        a.download = `血圧記録_${currentUser}_${dateStr}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // 保存イベント
+    document.getElementById('bp-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const record = {
+            datetime: document.getElementById('datetime').value,
+            systolic: Number(document.getElementById('systolic').value),
+            diastolic: Number(document.getElementById('diastolic').value),
+            pulse: document.getElementById('pulse').value ? Number(document.getElementById('pulse').value) : null,
+            memo: document.getElementById('memo').value
+        };
+
+        const records = getRecords();
+        records.unshift(record);
+        records.sort((a, b) => new Date(b.datetime) - new Date(a.datetime));
+        saveRecords(records);
+
+        this.reset();
+        setCurrentDateTime();
+        renderList();
+        updateChart();
+    });
+
+    // 削除イベント
+    function deleteRecord(index) {
+        if (confirm(`この記録を削除しますか？ (${currentUser})`)) {
+            const records = getRecords();
+            records.splice(index, 1);
+            saveRecords(records);
+            renderList();
+            updateChart();
+        }
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/[&<>'"]/g, 
+            tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+        );
+    }
+
+    // 初期化実行
+    setCurrentDateTime();
+    switchUser(currentUser);
+</script>
+</body>
+</html>
